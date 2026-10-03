@@ -1,0 +1,16 @@
+Sara Khan — Machine Learning Engineer
+Email: sara.khan@example.com | 2.5 years experience
+
+Skills: Python, machine learning, scikit-learn, natural language processing,
+spaCy, NLTK, transformers, Hugging Face, LLMs, prompt engineering, LangChain,
+OpenAI API, chatbots, sentiment analysis, FastAPI, Docker, SQL, Git,
+statistics, data visualization, Agile, technical writing.
+
+Experience:
+- ML Engineer, HelpDesk AI (2023–present): LLM-powered support chatbot with
+  the OpenAI API and LangChain; prompt engineering cut escalations by a
+  third; sentiment analysis on tickets with spaCy; FastAPI + Docker deploys.
+- NLP Intern, NewsLens (2022): text classification with NLTK and transformers;
+  documented models with clear technical writing for stakeholders.
+
+Education: BS Software Engineering.

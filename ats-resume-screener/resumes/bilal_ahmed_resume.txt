@@ -1,0 +1,16 @@
+Bilal Ahmed — Data Analyst
+Email: bilal.ahmed@example.com | 4 years experience
+
+Skills: Python, pandas, NumPy, SQL, Excel, Power BI, Tableau, statistics,
+data visualization, data analysis, A/B testing, stakeholder communication,
+Git, data mining.
+
+Experience:
+- Data Analyst, RetailCo (2021–present): Power BI dashboards, SQL reporting,
+  A/B testing of promotions; stakeholder communication with marketing.
+- Junior Analyst, LogiTrack (2020–2021): Excel and Tableau reporting.
+
+Coursework: introductory scikit-learn — trained a churn prediction model on
+a course dataset; understands basic machine learning concepts.
+
+Education: BBA, minor in Statistics.

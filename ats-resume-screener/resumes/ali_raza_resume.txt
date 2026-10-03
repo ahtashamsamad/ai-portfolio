@@ -1,0 +1,18 @@
+Ali Raza — AI/ML Engineer
+Email: ali.raza@example.com | GitHub: github.com/aliraza | 3 years experience
+
+Skills: Python, machine learning, deep learning, scikit-learn, TensorFlow,
+PyTorch, natural language processing, transformers, Hugging Face, LLMs,
+prompt engineering, LangChain, RAG, vector databases, FAISS, FastAPI, Flask,
+Docker, SQL, PostgreSQL, Git, MLflow, MLOps, statistics, pandas, NumPy,
+Agile, stakeholder communication.
+
+Experience:
+- Senior ML Engineer, DataWorks (2023–present): built a sentiment analysis
+  microservice with scikit-learn served behind FastAPI in Docker; RAG chatbot
+  over 10k support docs using LangChain, FAISS, and prompt engineering;
+  MLOps with MLflow and CI/CD on AWS.
+- ML Engineer, Finlytics (2022–2023): text classification with transformers
+  (Hugging Face), TensorFlow training pipelines, PostgreSQL feature stores.
+
+Education: BS Computer Science.

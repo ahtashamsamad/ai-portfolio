@@ -1,0 +1,12 @@
+Usman Tariq — Sales Executive
+Email: usman.tariq@example.com | 6 years experience
+
+Skills: B2B sales, negotiation, CRM, Excel, stakeholder communication,
+presentations, account management.
+
+Experience:
+- Senior Sales Executive, MedSupply (2019–present): B2B sales, CRM pipeline
+  management, Excel reporting, quarterly stakeholder presentations.
+- Sales Representative, TradeLine (2018–2019).
+
+Education: BBA Marketing. No software engineering background.

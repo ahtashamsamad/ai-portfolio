@@ -1,0 +1,14 @@
+Fatima Noor — Backend Developer
+Email: fatima.noor@example.com | 5 years experience
+
+Skills: Java, Spring Boot, REST API, microservices, MySQL, Docker, Git,
+Jenkins, CI/CD, Agile, system design, debugging, code review, some Python
+scripting for automation.
+
+Experience:
+- Backend Developer, PayGate (2020–present): Java microservices, REST APIs,
+  MySQL, Docker, Jenkins CI/CD pipelines; Agile sprints and code reviews.
+- Software Engineer, WebShop (2019–2020): Spring Boot services.
+
+Education: BS Computer Science. Interested in moving into machine learning;
+currently learning Python beyond scripting.
