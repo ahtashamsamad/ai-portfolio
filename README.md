@@ -4,6 +4,12 @@ Four client-demoable AI projects in Python: a document Q&A chatbot, a business
 FAQ + lead-capture chatbot API, a review sentiment dashboard, and an
 ATS-busting resume screener for HR.
 
+**Live demos**
+- 📄 [Chat with your PDF](https://ai-portfolio-jwev4baznf4cjwf5hv6wdx.streamlit.app/)
+- 💬 [Business FAQ & lead-capture chatbot](https://business-faq-lead-bot.onrender.com) ([chat widget](https://business-faq-lead-bot.onrender.com/widget))
+- 📊 [Review sentiment dashboard](https://ai-portfolio-flhuxakr6chyv53opzkcbx.streamlit.app/)
+- 📋 [ATS resume screener](https://ai-portfolio-et3o8xwtmckpkuk2rynywq.streamlit.app/)
+
 | Project | What it does | Stack |
 |---|---|---|
 | [pdf-rag-chatbot](pdf-rag-chatbot/) | Upload any PDF, ask questions in plain English, see the source passages (with page numbers) behind every answer. Optional OpenAI mode for natural answers. | Streamlit, scikit-learn, pypdf, OpenAI |
