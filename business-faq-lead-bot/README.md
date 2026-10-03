@@ -1,4 +1,4 @@
-Live demo: _(coming soon)_
+Live demo: https://business-faq-lead-bot.onrender.com (chat widget: https://business-faq-lead-bot.onrender.com/widget)
 
 # 💬 Business FAQ & Lead-Capture Chatbot
 
