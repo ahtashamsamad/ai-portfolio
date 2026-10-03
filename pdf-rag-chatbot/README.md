@@ -1,4 +1,4 @@
-Live demo: _(coming soon)_
+Live demo: https://ai-portfolio-jwev4baznf4cjwf5hv6wdx.streamlit.app/
 
 # 📄 PDF RAG Chatbot
 
