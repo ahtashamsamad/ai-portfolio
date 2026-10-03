@@ -1,4 +1,4 @@
-Live demo: _(coming soon)_
+Live demo: https://ai-portfolio-flhuxakr6chyv53opzkcbx.streamlit.app/
 
 # 📊 Review Sentiment Analyzer
 
