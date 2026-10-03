@@ -1,0 +1,12 @@
+# Union of all project dependencies, for hosts (e.g. Streamlit Community Cloud)
+# that install from the repository root.
+streamlit
+scikit-learn
+pypdf
+numpy
+openai
+fastapi
+uvicorn
+pandas
+matplotlib
+joblib
