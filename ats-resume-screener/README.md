@@ -1,4 +1,4 @@
-Live demo: _(coming soon)_
+Live demo: https://ai-portfolio-et3o8xwtmckpkuk2rynywq.streamlit.app/
 
 # 📋 ATS Resume Screener
 
