@@ -1,0 +1,25 @@
+AI/ML Engineer — NovaTech Solutions (Remote)
+
+NovaTech is hiring an AI/ML Engineer to design, build, and ship production
+machine learning systems used by thousands of customers.
+
+Responsibilities:
+- Design, train, and deploy machine learning models with Python and scikit-learn
+- Build NLP features: text classification and sentiment analysis
+- Experiment with large language models (LLMs): prompt engineering, LangChain,
+  and RAG pipelines over company documents
+- Serve models behind FastAPI services; containerize with Docker
+- Work with data pipelines in SQL and PostgreSQL; collaborate through Git
+  and Agile sprints
+- Monitor models in production: MLflow, basic CI/CD, MLOps practices
+
+Requirements:
+- 2+ years of professional experience with Python and machine learning
+  (scikit-learn, TensorFlow or PyTorch)
+- Hands-on NLP experience: transformers, Hugging Face, spaCy or NLTK
+- Familiarity with LLMs, prompt engineering, and LangChain
+- FastAPI or Flask, Docker, SQL
+- Strong statistics fundamentals and clear stakeholder communication
+
+Nice to have: AWS, Kubernetes, vector databases (FAISS, Pinecone), MLOps
+experience, deep learning and computer vision background.

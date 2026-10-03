@@ -1,0 +1,126 @@
+Python
+Java
+JavaScript
+TypeScript
+C++
+C#
+Go
+Rust
+Ruby
+PHP
+Swift
+Kotlin
+R
+MATLAB
+SQL
+HTML
+CSS
+machine learning
+deep learning
+natural language processing
+computer vision
+reinforcement learning
+generative AI
+artificial intelligence
+scikit-learn
+TensorFlow
+PyTorch
+Keras
+XGBoost
+LightGBM
+CatBoost
+pandas
+NumPy
+SciPy
+matplotlib
+seaborn
+Plotly
+statistics
+data analysis
+data visualization
+data mining
+ETL
+data warehousing
+Apache Spark
+Hadoop
+Apache Airflow
+dbt
+Power BI
+Tableau
+Excel
+A/B testing
+feature engineering
+model deployment
+MLOps
+MLflow
+Kubeflow
+Docker
+Kubernetes
+AWS
+Microsoft Azure
+Google Cloud
+Terraform
+CI/CD
+Jenkins
+Git
+GitHub Actions
+Linux
+Bash
+REST API
+FastAPI
+Flask
+Django
+Node.js
+React
+Angular
+Vue.js
+Next.js
+Streamlit
+LangChain
+OpenAI API
+prompt engineering
+LLM
+RAG
+Hugging Face
+transformers
+spaCy
+NLTK
+OpenCV
+YOLO
+OCR
+recommendation systems
+time series forecasting
+fraud detection
+churn prediction
+sentiment analysis
+chatbots
+vector databases
+Pinecone
+FAISS
+ChromaDB
+PostgreSQL
+MySQL
+MongoDB
+Redis
+Elasticsearch
+Snowflake
+BigQuery
+Apache Kafka
+RabbitMQ
+microservices
+system design
+Agile
+Scrum
+JIRA
+project management
+stakeholder communication
+technical writing
+documentation
+pytest
+unit testing
+debugging
+code review
+performance optimization
+OAuth
+GraphQL
+Firebase

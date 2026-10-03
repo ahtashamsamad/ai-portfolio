@@ -1,0 +1,6 @@
+# ats-resume-screener
+streamlit
+scikit-learn
+pypdf
+pandas
+numpy
