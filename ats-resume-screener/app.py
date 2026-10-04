@@ -39,13 +39,47 @@ if "resume_files" not in st.session_state:
     st.session_state.resume_files = []  # list of (name, text)
 
 
+def extract_pdf_text(uploaded):
+    """Extract text from a PDF, trying layout mode first.
+
+    Layout mode keeps multi-column resumes readable; plain mode is the
+    fallback. Returns (text, error) with error == "" on success — one bad
+    file never raises, so a single corrupt PDF can't break the whole batch.
+    """
+    last_error = ""
+    for mode in ("layout", "plain"):
+        try:
+            uploaded.seek(0)
+            reader = PdfReader(uploaded)
+            if reader.is_encrypted:
+                return "", "password-protected (decrypt it first)"
+            text = "\n".join(
+                (page.extract_text(extraction_mode=mode) or "")
+                for page in reader.pages
+            )
+            if text.strip():
+                return text, ""
+            last_error = "no extractable text (scanned/image PDFs need OCR first)"
+        except Exception as exc:
+            last_error = f"could not be read ({type(exc).__name__})"
+    return "", last_error
+
+
 def read_text_file(uploaded):
-    """Extract text from an uploaded .txt or .pdf file."""
+    """Extract text from an uploaded .txt or .pdf file.
+
+    Returns (text, error) with error == "" on success. Never raises.
+    """
     name = uploaded.name.lower()
-    if name.endswith(".pdf"):
-        reader = PdfReader(uploaded)
-        return "\n".join((page.extract_text() or "") for page in reader.pages)
-    return uploaded.read().decode("utf-8", errors="ignore")
+    if not name.endswith(".pdf"):
+        try:
+            return uploaded.read().decode("utf-8", errors="ignore"), ""
+        except Exception:
+            return "", "could not be read as text"
+    try:
+        return extract_pdf_text(uploaded)
+    except Exception:
+        return "", "could not be read"
 
 
 def load_sample_data():
@@ -120,7 +154,9 @@ with col_jd:
     )
     jd_upload = st.file_uploader("…or upload JD (.txt / .pdf)", type=["txt", "pdf"], key="jd_up")
     if jd_upload is not None:
-        jd_text = read_text_file(jd_upload)
+        jd_text, jd_error = read_text_file(jd_upload)
+        if jd_error:
+            st.error(f"❌ {jd_upload.name}: {jd_error}")
 
 with col_res:
     st.subheader("2️⃣ Resumes")
@@ -129,10 +165,16 @@ with col_res:
         accept_multiple_files=True, key="res_up",
     )
     if uploads:
-        st.session_state.resume_files = [
-            (name_from_filename(u.name), read_text_file(u)) for u in uploads
-        ]
+        files, problems = [], []
+        for u in uploads:
+            text, error = read_text_file(u)
+            files.append((name_from_filename(u.name), text))
+            if error:
+                problems.append(f"{u.name}: {error}")
+        st.session_state.resume_files = files
         st.session_state.pop("ranked", None)
+        for problem in problems:
+            st.error(f"❌ {problem}")
     if st.session_state.resume_files:
         names = [n for n, _ in st.session_state.resume_files]
         st.write(f"**{len(names)}** resume(s) ready: " + ", ".join(names))
