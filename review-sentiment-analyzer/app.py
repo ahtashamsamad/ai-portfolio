@@ -16,10 +16,8 @@ import re
 from collections import Counter
 
 import joblib
-import matplotlib
-matplotlib.use("Agg")  # headless-safe backend (also fine on Streamlit Cloud)
-import matplotlib.pyplot as plt
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -75,16 +73,36 @@ def top_words(texts, lexicon, n=10):
 
 
 def distribution_figure(counts):
-    """Matplotlib bar chart of positive vs negative counts."""
-    fig, ax = plt.subplots()
-    labels = list(counts.index)
-    ax.bar(labels, counts.values, color=["#2ca02c" if l == "positive" else "#d62728"
-                                        for l in labels])
-    ax.set_title("Sentiment distribution")
-    ax.set_ylabel("Reviews")
-    for i, v in enumerate(counts.values):
-        ax.text(i, v, str(v), ha="center", va="bottom")
-    fig.tight_layout()
+    """Interactive Plotly pie chart of positive vs negative counts."""
+    fig = px.pie(
+        values=counts.values,
+        names=counts.index,
+        title="Sentiment distribution",
+        color=counts.index,
+        color_discrete_map={"positive": "#2ca02c", "negative": "#d62728"},
+    )
+    fig.update_traces(textinfo="label+percent+value",
+                      hoverinfo="label+value+percent")
+    return fig
+
+
+def top_words_figure(word_counts, title, color):
+    """Interactive Plotly horizontal bar chart of the most frequent words.
+
+    Returns None when there is nothing to plot.
+    """
+    if not word_counts:
+        return None
+    words, freq = zip(*word_counts)
+    fig = px.bar(
+        x=list(freq),
+        y=list(words),
+        orientation="h",
+        title=title,
+        labels={"x": "Mentions", "y": ""},
+        color_discrete_sequence=[color],
+    )
+    fig.update_layout(yaxis={"categoryorder": "total ascending"})
     return fig
 
 
@@ -123,21 +141,25 @@ def main():
             results = batch_predict(model, df[col].astype(str).tolist())
 
         counts = results["sentiment"].value_counts()
-        st.pyplot(distribution_figure(counts))
+        st.plotly_chart(distribution_figure(counts), use_container_width=True)
 
+        pos = results.loc[results["sentiment"] == "positive", "review"]
+        neg = results.loc[results["sentiment"] == "negative", "review"]
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("**Top positive words**")
-            pos = results.loc[results["sentiment"] == "positive", "review"]
-            st.dataframe(pd.DataFrame(top_words(pos, POS_WORDS),
-                                      columns=["word", "count"]),
-                         hide_index=True)
+            fig = top_words_figure(top_words(pos, POS_WORDS),
+                                   "Top positive words", "#2ca02c")
+            if fig is not None:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.caption("No positive lexicon words found.")
         with col2:
-            st.markdown("**Top negative words**")
-            neg = results.loc[results["sentiment"] == "negative", "review"]
-            st.dataframe(pd.DataFrame(top_words(neg, NEG_WORDS),
-                                      columns=["word", "count"]),
-                         hide_index=True)
+            fig = top_words_figure(top_words(neg, NEG_WORDS),
+                                   "Top negative words", "#d62728")
+            if fig is not None:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.caption("No negative lexicon words found.")
 
         csv_bytes = results.to_csv(index=False).encode("utf-8")
         st.download_button("⬇ Download results as CSV", csv_bytes,
