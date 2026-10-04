@@ -6,7 +6,7 @@ Rank resumes against a job description — match score, skill gaps, section feed
 
 ## Screenshots
 
-> Screenshots will be added after the next deploy (`docs/screenshots/`).
+![ATS Resume Screener](docs/screenshots/app.png)
 
 ## Features
 

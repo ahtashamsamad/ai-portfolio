@@ -6,7 +6,7 @@ Classify customer reviews as positive, neutral or negative — with confidence s
 
 ## Screenshots
 
-> Screenshots will be added after the next deploy (`docs/screenshots/`).
+![Review Sentiment Dashboard](docs/screenshots/app.png)
 
 ## Features
 
