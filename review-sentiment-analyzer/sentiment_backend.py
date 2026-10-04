@@ -28,7 +28,10 @@ NEG_WORDS = {"terrible", "awful", "horrible", "boring", "disappointing",
              "hated", "disliked", "regretted", "disaster", "mess"}
 
 MAX_BATCH_ROWS = 5000  # cap for a single CSV upload (keeps memory predictable)
-LOW_CONFIDENCE = 0.60  # predictions below this are flagged for human review
+LOW_CONFIDENCE = 0.60  # predictions below this become "neutral"
+
+# Label shown when the model isn't confident enough to call it.
+NEUTRAL_LABEL = "neutral"
 
 
 # ---------------------------------------------------------------------------
@@ -45,18 +48,40 @@ def get_model():
 
 
 def predict_single(model, text):
-    """Return (label, confidence) for one review string."""
-    label = model.predict([text])[0]
+    """Return (label, confidence) for one review string.
+
+    Low-confidence predictions (< LOW_CONFIDENCE) are labelled "neutral"
+    instead of forcing a positive/negative call.
+    """
+    raw_label = model.predict([text])[0]
     confidence = float(model.predict_proba([text]).max())
+    label = raw_label if confidence >= LOW_CONFIDENCE else NEUTRAL_LABEL
     return label, confidence
 
 
 def batch_predict(model, texts):
-    """Return a DataFrame with each text, its label and confidence."""
-    labels = model.predict(texts)
+    """Return a DataFrame with each text, its label and confidence.
+
+    Labels are positive / negative / neutral (neutral = low confidence).
+    """
+    raw_labels = model.predict(texts)
     confidences = model.predict_proba(texts).max(axis=1)
+    labels = [lbl if conf >= LOW_CONFIDENCE else NEUTRAL_LABEL
+              for lbl, conf in zip(raw_labels, confidences)]
     return pd.DataFrame({"review": texts, "sentiment": labels,
                          "confidence": confidences.round(3)})
+
+
+def detect_date_column(df):
+    """Return the first column that parses as datetimes (>=80% valid), else None."""
+    for col in df.columns:
+        try:
+            parsed = pd.to_datetime(df[col], errors="coerce")
+        except Exception:
+            continue
+        if parsed.notna().mean() >= 0.8:
+            return col
+    return None
 
 
 def top_words(texts, lexicon, n=10):
@@ -70,16 +95,44 @@ def top_words(texts, lexicon, n=10):
 
 
 def distribution_figure(counts):
-    """Interactive Plotly pie chart of positive vs negative counts."""
+    """Interactive Plotly pie chart of positive / neutral / negative counts."""
+    order = ["positive", "neutral", "negative"]
+    counts = counts.reindex([c for c in order if c in counts.index])
     fig = px.pie(
         values=counts.values,
         names=counts.index,
         title="Sentiment distribution",
         color=counts.index,
-        color_discrete_map={"positive": "#2ca02c", "negative": "#d62728"},
+        color_discrete_map={"positive": "#2ca02c", "neutral": "#9e9e9e",
+                            "negative": "#d62728"},
     )
     fig.update_traces(textinfo="label+percent+value",
                       hoverinfo="label+value+percent")
+    return fig
+
+
+def trend_figure(dated):
+    """Daily % positive/negative/neutral line chart (needs a date column).
+
+    `dated` is a DataFrame with 'date' (datetime) and 'sentiment' columns.
+    Returns None when there is nothing to plot.
+    """
+    if dated.empty:
+        return None
+    daily = (dated.assign(day=dated["date"].dt.date)
+                  .groupby(["day", "sentiment"]).size()
+                  .unstack(fill_value=0))
+    daily = daily.div(daily.sum(axis=1), axis=0).mul(100).round(1)
+    fig = px.line(
+        daily.reset_index().melt(id_vars="day", var_name="sentiment",
+                                 value_name="pct"),
+        x="day", y="pct", color="sentiment",
+        title="Sentiment trend (% of reviews per day)",
+        labels={"day": "Date", "pct": "% of reviews"},
+        color_discrete_map={"positive": "#2ca02c", "neutral": "#9e9e9e",
+                            "negative": "#d62728"},
+    )
+    fig.update_layout(yaxis={"range": [0, 100]})
     return fig
 
 
