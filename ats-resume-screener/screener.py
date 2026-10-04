@@ -392,23 +392,23 @@ def build_report_pdf(ranked, jd_text):
         pdf.cell(0, 10, _latin1(f"#{i} — {r['name']} ({r['score']}% match)"),
                  new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
-        pdf.multi_cell(0, 6, _latin1(r["summary"]))
+        pdf.multi_cell(0, 6, _latin1(r["summary"]), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(0, 8, _latin1("Matched skills"), new_x="LMARGIN",
                  new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
-        pdf.multi_cell(0, 6, _latin1(", ".join(r["matched_skills"])
-                                     or "None"))
+        pdf.multi_cell(0, 6, _latin1(", ".join(r["matched_skills"]) or "None"),
+                         new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(0, 8, _latin1("Missing skills"), new_x="LMARGIN",
                  new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
-        pdf.multi_cell(0, 6, _latin1(", ".join(r["missing_skills"])
-                                     or "None"))
+        pdf.multi_cell(0, 6, _latin1(", ".join(r["missing_skills"]) or "None"),
+                         new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(0, 8, _latin1("Suggestions"), new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
         for s in build_suggestions(r, jd_text):
-            pdf.multi_cell(0, 6, _latin1("- " + s))
+            pdf.multi_cell(0, 6, _latin1("- " + s), new_x="LMARGIN", new_y="NEXT")
     return bytes(pdf.output())
