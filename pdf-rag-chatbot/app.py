@@ -257,6 +257,10 @@ def main():
                    f"{len(docs)} document(s), {total_pages} pages.")
 
     docs = st.session_state.docs
+    if not docs:
+        st.info("Upload a PDF (or try the sample) to get started.")
+        render_footer()
+        return
 
     # ---- document summary ----
     with st.expander("📝 Document summary (auto-generated)", expanded=False):
