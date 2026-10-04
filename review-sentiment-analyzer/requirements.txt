@@ -1,5 +1,6 @@
-streamlit
-scikit-learn
-pandas
-plotly
-joblib
+# review-sentiment-analyzer — pinned for reproducible deploys.
+streamlit==1.65.0
+scikit-learn==1.9.1
+pandas==3.0.6
+plotly==7.1.0
+joblib==1.6.0

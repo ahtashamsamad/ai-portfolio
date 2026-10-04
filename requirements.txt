@@ -1,12 +1,15 @@
 # Union of all project dependencies, for hosts (e.g. Streamlit Community Cloud)
-# that install from the repository root.
-streamlit
-scikit-learn
-pypdf
-numpy
-openai
-fastapi
-uvicorn
-pandas
-plotly
-joblib
+# that install from the repository root. Per-app pins live in each app's
+# requirements.txt — keep them in sync when versions change.
+streamlit==1.65.0
+scikit-learn==1.9.1
+pypdf==6.19.0
+numpy==2.5.3
+openai==3.24.0
+fastapi==0.142.2
+uvicorn==0.54.0
+pandas==3.0.6
+plotly==7.1.0
+joblib==1.6.0
+python-docx==1.2.0
+fpdf2==2.8.9

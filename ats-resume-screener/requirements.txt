@@ -1,7 +1,9 @@
-# ats-resume-screener
-streamlit
-scikit-learn
-pypdf
-pandas
-plotly
-numpy
+# ats-resume-screener — pinned for reproducible deploys.
+streamlit==1.65.0
+scikit-learn==1.9.1
+pypdf==6.19.0
+pandas==3.0.6
+plotly==7.1.0
+numpy==2.5.3
+python-docx==1.2.0
+fpdf2==2.8.9
