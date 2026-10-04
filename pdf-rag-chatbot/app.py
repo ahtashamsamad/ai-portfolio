@@ -1,184 +1,308 @@
-"""
-PDF RAG Chatbot — ask questions about any PDF, get answers with sources.
+"""PDF RAG Chatbot — ask questions about your PDFs, get grounded answers.
 
-How it works:
-  1. Upload a PDF -> text is extracted page by page (pypdf).
-  2. Text is split into ~300-word passages (50-word overlap), each tagged
-     with the page number it came from.
-  3. Your question is matched against the passages with TF-IDF
-     (scikit-learn); the top-3 passages are shown with page number and
-     a relevance score.
-  4. Optionally, paste an OpenAI API key in the sidebar and an LLM will
-     write a natural-language answer grounded ONLY in those passages.
-     Without a key the app runs in extractive mode: it just shows you
-     the most relevant passages directly (nothing leaves your machine).
-  5. The indexed document and the full chat history live in
-     st.session_state — the PDF is processed once and the conversation
-     survives every rerun.
+- Upload one or more PDFs (or try the bundled sample).
+- Answers stream in live and cite page-numbered sources per document.
+- The assistant only answers from the uploaded text: anything not found
+  gets an honest "not in the document" reply instead of a hallucination.
+- Optional OpenAI key (st.secrets first, sidebar fallback) upgrades
+  extractive answers to natural-language ones. Without a key everything
+  runs 100% locally — your documents never leave this machine.
 """
+
+import io
+import os
 
 import streamlit as st
 
 from rag_backend import (
     MAX_PDF_MB,
+    RELEVANCE_THRESHOLD,
     chunk_pages,
     extract_pages,
+    extractive_answer,
     llm_answer,
+    not_in_document_message,
+    stream_words,
+    summarize,
     retrieve,
 )
 
-
-# Session state — chat history + indexed document survive every rerun
+# ---------------------------------------------------------------------------
+# Portfolio chrome
 # ---------------------------------------------------------------------------
 
-def init_state():
-    """Create the session-state keys this app depends on (idempotent)."""
-    if "messages" not in st.session_state:
-        # [{"role": "user"|"assistant", "content": str, "sources": [...]}, ...]
-        st.session_state.messages = []
-    if "doc" not in st.session_state:
-        # {"name": str, "pages": int, "chunks": [...]} once a PDF is indexed
-        st.session_state.doc = None
+DEV_NAME = "Ahtasham Samad"
+UPWORK_URL = "https://www.upwork.com/freelancers/~01d75561be7a2cd578"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SAMPLE_PDF_PATH = os.path.join(BASE_DIR, "sample.pdf")
 
 
-def index_pdf(uploaded):
-    """Extract + chunk a newly uploaded PDF and store it in session state.
-
-    Returns True on success, False when the file is rejected (too large,
-    corrupt, encrypted, or no extractable text). All failure modes show a
-    friendly message instead of crashing.
-    """
-    size = getattr(uploaded, "size", 0) or 0
-    if size > MAX_PDF_MB * 1024 * 1024:
-        st.error(f"That PDF is {size / 1024 / 1024:.1f} MB — the limit is "
-                 f"{MAX_PDF_MB} MB. Please upload a smaller file.")
-        return False
-    if size == 0:
-        st.error("That file looks empty (0 bytes). Please upload a valid PDF.")
-        return False
+def get_secret_key():
+    """Read OPENAI_API_KEY from st.secrets. Never hardcode keys in code."""
     try:
-        with st.spinner("Reading PDF…"):
-            pages = extract_pages(uploaded)
-    except RuntimeError as exc:
-        # password-protected PDF (raised by extract_pages)
-        st.error(str(exc))
-        return False
+        return (st.secrets.get("OPENAI_API_KEY") or "").strip()
     except Exception:
-        st.error("Could not read this PDF — the file may be corrupt. "
-                 "Try re-exporting it, then re-upload.")
-        return False
-    if not pages:
-        st.warning("No extractable text found in this PDF. It may be a scanned "
-                   "document (images only) — run it through an OCR tool first, "
-                   "then re-upload.")
-        return False
-    chunks = chunk_pages(pages)
-    st.session_state.doc = {
-        "name": uploaded.name,
-        "pages": len(pages),
-        "chunks": chunks,
-    }
-    st.session_state.messages = []       # fresh document -> fresh conversation
-    st.success(f"Indexed {len(chunks)} passages from {len(pages)} pages.")
-    return True
+        return ""
 
 
-def answer_question(question, api_key):
-    """Run retrieval (+ optional LLM) and append the exchange to the history."""
-    st.session_state.messages.append({"role": "user", "content": question})
-    with st.spinner("Searching…"):
-        results = retrieve(st.session_state.doc["chunks"], question)
+def render_about_sidebar():
+    with st.sidebar:
+        st.divider()
+        st.subheader("About")
+        st.markdown(f"**Built by [{DEV_NAME}]({UPWORK_URL})** — AI/ML Developer")
+        st.markdown("**Tools:** Python, Streamlit, scikit-learn (TF-IDF "
+                    "retrieval), pypdf, OpenAI API (optional)")
 
-    sources = results
-    if not results or all(r["score"] <= 0 for r in results):
-        content = ("No relevant passages found in this document. "
-                   "Try rephrasing your question.")
-        sources = []
-    elif api_key:
-        try:
-            with st.spinner("Writing answer…"):
-                content = llm_answer(question, results, api_key)
-        except Exception as exc:  # e.g. bad key, no network
-            content = (f"OpenAI call failed ({exc}). "
-                       f"Showing the retrieved passages instead.")
-    else:
-        content = ("Extractive mode — top matching passages below "
-                   "(add an OpenAI key in the sidebar for natural-language answers).")
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": content, "sources": sources}
+def render_footer():
+    st.divider()
+    st.markdown(
+        f"Need a custom AI app? **[Hire me on Upwork]({UPWORK_URL})** · "
+        f"Built by {DEV_NAME}"
     )
 
 
+# ---------------------------------------------------------------------------
+# Document handling
+# ---------------------------------------------------------------------------
+
+def validate_pdf(uploaded):
+    """Return an error string for a bad file, or '' when it looks fine."""
+    if not uploaded.name.lower().endswith(".pdf"):
+        return f"'{uploaded.name}' is not a PDF file."
+    size = getattr(uploaded, "size", 0) or 0
+    if size == 0:
+        return f"'{uploaded.name}' is empty (0 bytes)."
+    if size > MAX_PDF_MB * 1024 * 1024:
+        return (f"'{uploaded.name}' is {size / 1024 / 1024:.1f} MB — "
+                f"the limit is {MAX_PDF_MB} MB per file.")
+    return ""
+
+
+def index_documents(files):
+    """Extract + chunk every file. Returns (docs, problems).
+
+    docs: {name: {"pages": int, "chunks": [...], "text": str}}
+    problems: {name: friendly per-file error string}.
+    """
+    docs, problems = {}, {}
+    with st.spinner(f"Reading {len(files)} PDF(s)…"):
+        progress = st.progress(0.0)
+        for i, f in enumerate(files):
+            err = validate_pdf(f)
+            if err:
+                problems[f.name] = err
+            else:
+                try:
+                    pages = extract_pages(f)
+                except RuntimeError as exc:      # password-protected
+                    problems[f.name] = f"{f.name}: {exc}"
+                except Exception:
+                    problems[f.name] = (f"{f.name}: could not be read — "
+                                        "the file may be corrupt.")
+                else:
+                    if not pages:
+                        problems[f.name] = (
+                            f"{f.name}: no extractable text found. It may be a "
+                            "scanned (image-only) PDF — run it through an OCR "
+                            "tool first, then re-upload.")
+                    else:
+                        full = " ".join(t for _, t in pages)
+                        docs[f.name] = {"pages": len(pages),
+                                        "chunks": chunk_pages(pages),
+                                        "text": full}
+            progress.progress((i + 1) / len(files))
+        progress.empty()
+    return docs, problems
+
+
+def sample_file():
+    """Load the bundled sample PDF as an upload-like object."""
+    with open(SAMPLE_PDF_PATH, "rb") as f:
+        data = f.read()
+    bio = io.BytesIO(data)
+    bio.name = "sample.pdf"
+    bio.size = len(data)
+    return bio
+
+
+def build_answer(question, docs, api_key):
+    """Return (sources, answer_text) for a question over the indexed docs."""
+    corpus = []
+    for name, d in docs.items():
+        for c in d["chunks"]:
+            corpus.append({"doc": name, **c})
+    results = retrieve(corpus, question)
+    if not results or results[0]["score"] < RELEVANCE_THRESHOLD:
+        return [], not_in_document_message()
+    if api_key:
+        try:
+            return results, llm_answer(question, results, api_key)
+        except Exception as exc:  # bad key, no network, quota…
+            return results, (
+                f"The AI service failed ({exc}). "
+                "Showing the most relevant passages instead.\n\n"
+                + extractive_answer(results))
+    return results, extractive_answer(results)
+
+
 def render_history():
-    """Render the conversation stored in session state as chat bubbles."""
     for m in st.session_state.messages:
         with st.chat_message("user" if m["role"] == "user" else "assistant"):
             st.markdown(m["content"])
             for i, r in enumerate(m.get("sources", []), 1):
                 snippet = r["text"][:1200] + ("…" if len(r["text"]) > 1200 else "")
                 with st.expander(
-                    f"📄 Passage {i} — page {r['page']} (relevance {r['score']:.3f})"
+                    f"📄 Source {i} — {r['doc']}, page {r['page']} "
+                    f"(relevance {r['score']:.3f})"
                 ):
                     st.write(snippet)
+
+
+def chat_as_text():
+    lines = []
+    for m in st.session_state.messages:
+        who = "You" if m["role"] == "user" else "Assistant"
+        lines.append(f"{who}: {m['content']}\n")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
 # Streamlit UI
 # ---------------------------------------------------------------------------
 
-def main():
-    st.set_page_config(page_title="PDF RAG Chatbot", page_icon="📄")
-    st.title("📄 Chat with your PDF")
-    st.caption("Upload a PDF, ask questions in plain English, and see exactly "
-               "which passages the answers come from.")
+def init_state():
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "docs" not in st.session_state:
+        st.session_state.docs = {}          # name -> indexed document
+    if "indexed_names" not in st.session_state:
+        st.session_state.indexed_names = ()
 
+
+def main():
+    st.set_page_config(page_title="PDF RAG Chatbot", page_icon="📄",
+                       layout="wide")
     init_state()
 
+    st.title("📄 PDF RAG Chatbot")
+    st.caption("⏳ If the app was asleep, it may take up to a minute to wake — "
+               "please wait.")
+    st.info(
+        "**What it does:** Chat with your PDFs — grounded answers with "
+        "page-numbered sources, never hallucinations.\n\n"
+        "**Who it's for:** Students, researchers and professionals working "
+        "with long documents.\n\n"
+        "**How to use:** ① Upload one or more PDFs (or try the sample) → "
+        "② Ask a question → ③ Check the cited sources."
+    )
+
+    secret_key = get_secret_key()
     with st.sidebar:
         st.header("Settings")
-        api_key = st.text_input(
-            "OpenAI API key (optional)",
-            type="password",
-            help="With a key, an LLM writes a natural answer from the retrieved "
-                 "passages. Without one, the app shows the passages directly.",
-        )
-        st.caption("Extractive mode (no key) runs 100% locally — your document "
-                   "never leaves this machine.")
+        if secret_key:
+            st.success("OpenAI key loaded from secrets ✓")
+            api_key = secret_key
+        else:
+            api_key = st.text_input(
+                "OpenAI API key (optional)", type="password",
+                help="With a key, an LLM writes a natural answer from the "
+                     "retrieved passages. Without one, the app shows the "
+                     "passages directly.")
+            api_key = (api_key or "").strip()
+        st.caption("Extractive mode (no key) runs 100% locally — your "
+                   "documents never leave this machine.")
+    render_about_sidebar()
 
-    uploaded = st.file_uploader("Upload a PDF", type=["pdf"])
-    if uploaded is None:
-        # File removed (or never uploaded) -> drop the document and history.
-        st.session_state.doc = None
+    # ---- inputs: uploads + sample ----
+    col_up, col_sample = st.columns([3, 1])
+    with col_up:
+        uploads = st.file_uploader(
+            "Upload PDF(s)", type=["pdf"], accept_multiple_files=True,
+            help=f"PDF only, up to {MAX_PDF_MB} MB per file.")
+    with col_sample:
+        st.write("")  # align with uploader
+        if st.button("✨ Try with sample",
+                     help="Load a bundled sample PDF — no upload needed."):
+            st.session_state.sample_requested = True
+
+    files = list(uploads or [])
+    if st.session_state.pop("sample_requested", False):
+        files = [sample_file()]
+        st.info("Sample PDF loaded — ask it anything!")
+
+    names = tuple(sorted(f.name for f in files))
+    if names != st.session_state.indexed_names:
+        # Document set changed -> (re)index everything.
         st.session_state.messages = []
-        st.info("Upload a PDF to get started.")
+        if not files:
+            st.session_state.docs = {}
+            st.session_state.indexed_names = ()
+            st.info("Upload a PDF (or try the sample) to get started.")
+            render_footer()
+            return
+        docs, problems = index_documents(files)
+        for problem in problems.values():
+            st.error(problem)
+        if not docs:
+            st.session_state.docs = {}
+            st.session_state.indexed_names = names
+            render_footer()
+            return
+        st.session_state.docs = docs
+        st.session_state.indexed_names = names
+        total_pages = sum(d["pages"] for d in docs.values())
+        total_chunks = sum(len(d["chunks"]) for d in docs.values())
+        st.success(f"Indexed {total_chunks} passages from "
+                   f"{len(docs)} document(s), {total_pages} pages.")
+
+    docs = st.session_state.docs
+    if not docs:
+        st.info("Upload a PDF (or try the sample) to get started.")
+        render_footer()
         return
 
-    if st.session_state.doc is None or st.session_state.doc["name"] != uploaded.name:
-        # New (or first) document — index once, then reuse from session state.
-        if not index_pdf(uploaded):
-            return
+    # ---- document summary ----
+    with st.expander("📝 Document summary (auto-generated)", expanded=False):
+        for name, d in docs.items():
+            st.markdown(f"**{name}** — {d['pages']} pages, "
+                        f"{len(d['chunks'])} passages")
+            st.write(summarize(d["text"]) or "Summary unavailable.")
 
-    doc = st.session_state.doc
-    head_l, head_r = st.columns([5, 1])
+    # ---- chat ----
+    head_l, head_r = st.columns([4, 1])
     with head_l:
-        st.caption(f"Chatting with **{doc['name']}** — {doc['pages']} pages indexed.")
+        st.caption("Chatting with: " + ", ".join(
+            f"**{n}**" for n in docs))
     with head_r:
-        if st.button("🧹 Clear", help="Clear the chat history (keeps the indexed PDF)"):
+        if st.button("🧹 Clear chat",
+                     help="Clear the chat history (keeps the indexed PDFs)"):
             st.session_state.messages = []
             st.rerun()
 
     render_history()
 
-    # st.chat_input clears itself after submit, so each question is
-    # processed exactly once — no rerun guard needed.
-    if prompt := st.chat_input("Ask a question about the document"):
-        answer_question(prompt, api_key)
+    if prompt := st.chat_input("Ask a question about the document(s)"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        with st.spinner("Searching the document(s)…"):
+            sources, answer = build_answer(prompt, docs, api_key)
+        with st.chat_message("assistant"):
+            st.write_stream(stream_words(answer))   # visible streaming
+        st.session_state.messages.append(
+            {"role": "assistant", "content": answer, "sources": sources})
         st.rerun()
+
+    if st.session_state.messages:
+        st.download_button(
+            "⬇ Download chat as TXT", chat_as_text().encode("utf-8"),
+            file_name="pdf-chat.txt", mime="text/plain")
+
+    render_footer()
 
 
 def _in_streamlit_runtime():
-    """True only when executed via `streamlit run` (lets us import headlessly)."""
     try:
         from streamlit.runtime import exists
         return bool(exists())
