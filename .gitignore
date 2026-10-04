@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env/
+
+# Streamlit secrets — NEVER commit real keys.
+# (Use the .streamlit/secrets.toml.example placeholders as a template.)
+**/.streamlit/secrets.toml
+
+# Data / models generated at runtime
+*.joblib
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
