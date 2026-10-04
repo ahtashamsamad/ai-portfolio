@@ -27,6 +27,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 CHUNK_WORDS = 300      # target words per passage
 OVERLAP_WORDS = 50     # overlap between consecutive passages (keeps context)
 TOP_K = 3              # how many passages to retrieve per question
+MAX_PDF_MB = 25        # reject uploads larger than this (memory safety)
 
 
 # ---------------------------------------------------------------------------
@@ -38,8 +39,12 @@ def extract_pages(pdf_file):
 
     `pdf_file` is any binary file-like object (e.g. Streamlit's uploader).
     Pages with no text (scanned images) are skipped.
+    Raises RuntimeError for password-protected PDFs.
     """
     reader = PdfReader(pdf_file)
+    if reader.is_encrypted:
+        raise RuntimeError("This PDF is password-protected. Remove the "
+                           "password first, then re-upload.")
     pages = []
     for i, page in enumerate(reader.pages, start=1):
         text = page.extract_text() or ""
@@ -136,10 +141,29 @@ def init_state():
 def index_pdf(uploaded):
     """Extract + chunk a newly uploaded PDF and store it in session state.
 
-    Returns True on success, False when the PDF has no extractable text.
+    Returns True on success, False when the file is rejected (too large,
+    corrupt, encrypted, or no extractable text). All failure modes show a
+    friendly message instead of crashing.
     """
-    with st.spinner("Reading PDF…"):
-        pages = extract_pages(uploaded)
+    size = getattr(uploaded, "size", 0) or 0
+    if size > MAX_PDF_MB * 1024 * 1024:
+        st.error(f"That PDF is {size / 1024 / 1024:.1f} MB — the limit is "
+                 f"{MAX_PDF_MB} MB. Please upload a smaller file.")
+        return False
+    if size == 0:
+        st.error("That file looks empty (0 bytes). Please upload a valid PDF.")
+        return False
+    try:
+        with st.spinner("Reading PDF…"):
+            pages = extract_pages(uploaded)
+    except RuntimeError as exc:
+        # password-protected PDF (raised by extract_pages)
+        st.error(str(exc))
+        return False
+    except Exception:
+        st.error("Could not read this PDF — the file may be corrupt. "
+                 "Try re-exporting it, then re-upload.")
+        return False
     if not pages:
         st.warning("No extractable text found in this PDF. It may be a scanned "
                    "document (images only) — run it through an OCR tool first, "
