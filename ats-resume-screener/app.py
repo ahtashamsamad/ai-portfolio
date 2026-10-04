@@ -5,20 +5,19 @@ plus skill overlap, and explains every score. Deployable on Streamlit
 Community Cloud: main file path is app.py.
 """
 
-import glob
 import html
-import os
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from pypdf import PdfReader
 
-from screener import load_skills, name_from_filename, rank_resumes
-
-BASE_DIR = os.path.dirname(__file__)
-SAMPLE_JD_PATH = os.path.join(BASE_DIR, "sample_jd.txt")
-SAMPLE_RESUMES_DIR = os.path.join(BASE_DIR, "resumes")
+from screener import (
+    load_sample_data,
+    load_skills,
+    name_from_filename,
+    rank_resumes,
+    read_text_file,
+)
 
 st.set_page_config(page_title="ATS Resume Screener", page_icon="📋", layout="wide")
 
@@ -37,59 +36,6 @@ if "jd_text" not in st.session_state:
     st.session_state.jd_text = ""
 if "resume_files" not in st.session_state:
     st.session_state.resume_files = []  # list of (name, text)
-
-
-def extract_pdf_text(uploaded):
-    """Extract text from a PDF, trying layout mode first.
-
-    Layout mode keeps multi-column resumes readable; plain mode is the
-    fallback. Returns (text, error) with error == "" on success — one bad
-    file never raises, so a single corrupt PDF can't break the whole batch.
-    """
-    last_error = ""
-    for mode in ("layout", "plain"):
-        try:
-            uploaded.seek(0)
-            reader = PdfReader(uploaded)
-            if reader.is_encrypted:
-                return "", "password-protected (decrypt it first)"
-            text = "\n".join(
-                (page.extract_text(extraction_mode=mode) or "")
-                for page in reader.pages
-            )
-            if text.strip():
-                return text, ""
-            last_error = "no extractable text (scanned/image PDFs need OCR first)"
-        except Exception as exc:
-            last_error = f"could not be read ({type(exc).__name__})"
-    return "", last_error
-
-
-def read_text_file(uploaded):
-    """Extract text from an uploaded .txt or .pdf file.
-
-    Returns (text, error) with error == "" on success. Never raises.
-    """
-    name = uploaded.name.lower()
-    if not name.endswith(".pdf"):
-        try:
-            return uploaded.read().decode("utf-8", errors="ignore"), ""
-        except Exception:
-            return "", "could not be read as text"
-    try:
-        return extract_pdf_text(uploaded)
-    except Exception:
-        return "", "could not be read"
-
-
-def load_sample_data():
-    with open(SAMPLE_JD_PATH, encoding="utf-8") as f:
-        jd = f.read()
-    resumes = []
-    for path in sorted(glob.glob(os.path.join(SAMPLE_RESUMES_DIR, "*.txt"))):
-        with open(path, encoding="utf-8") as f:
-            resumes.append((name_from_filename(path), f.read()))
-    return jd, resumes
 
 
 def gauge_figure(score, name):
