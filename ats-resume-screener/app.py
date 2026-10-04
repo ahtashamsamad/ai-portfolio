@@ -6,6 +6,7 @@ Community Cloud: main file path is app.py.
 """
 
 import glob
+import html
 import os
 
 import pandas as pd
@@ -78,6 +79,26 @@ def gauge_figure(score, name):
     ))
     fig.update_layout(height=280, margin={"t": 60, "b": 20, "l": 20, "r": 20})
     return fig
+
+
+def skill_pills(skills, kind):
+    """Render skills as colored pill badges (HTML).
+
+    kind="matched" -> green pills, kind="missing" -> red pills.
+    Skill names are HTML-escaped, so this is safe to render.
+    """
+    if not skills:
+        return "—"
+    if kind == "matched":
+        bg, fg = "#d4edda", "#155724"
+    else:
+        bg, fg = "#f8d7da", "#721c24"
+    return " ".join(
+        f'<span style="background:{bg};color:{fg};padding:2px 10px;'
+        f'border-radius:12px;margin:2px;display:inline-block;'
+        f'font-size:0.85em;">{html.escape(s)}</span>'
+        for s in skills
+    )
 
 
 # ---------- sample data ----------
@@ -180,9 +201,11 @@ if st.session_state.get("ranked"):
             with c2:
                 st.metric("Skill overlap", f"{r['skill_overlap']:.0%}")
             st.markdown("**✅ Matched skills**")
-            st.write(", ".join(r["matched_skills"]) if r["matched_skills"] else "—")
+            st.markdown(skill_pills(r["matched_skills"], "matched"),
+                        unsafe_allow_html=True)
             st.markdown("**❌ Missing skills (wanted by the JD)**")
-            st.write(", ".join(r["missing_skills"]) if r["missing_skills"] else "—")
+            st.markdown(skill_pills(r["missing_skills"], "missing"),
+                        unsafe_allow_html=True)
             st.info(r["summary"])
 
     st.caption(
