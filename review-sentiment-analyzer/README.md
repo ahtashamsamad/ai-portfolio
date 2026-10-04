@@ -1,74 +1,53 @@
-Live demo: https://ai-portfolio-flhuxakr6chyv53opzkcbx.streamlit.app/
+# 📊 Review Sentiment Dashboard
 
-# 📊 Review Sentiment Analyzer
+Classify customer reviews as positive, neutral or negative — with confidence scores, trends and keyword insights.
 
-Classifies customer reviews as positive or negative. Type a single review for
-an instant prediction, or upload a CSV for batch analysis with a distribution
-chart, the most frequent praise/complaint words, and a downloadable results
-file.
+**Live demo:** https://ai-portfolio-flhuxakr6chyv53opzkcbx.streamlit.app/
 
-**Honest note:** the demo model is trained on 400 synthetic movie-style
-reviews (see `generate_data.py`). For a real business it should be retrained
-on that business's own labeled reviews — the pipeline (`train.py`) makes that
-a one-command job.
+## Screenshots
+
+> Screenshots will be added after the next deploy (`docs/screenshots/`).
 
 ## Features
 
-- **Single review**: instant prediction with confidence score
-- **Batch CSV**: upload a whole file — validated on read (bad CSV / empty
-  file shows a friendly error), capped at 5,000 rows per run, with a live
-  progress bar
-- `@st.cache_data` on batch predictions — tweaking charts below doesn't
-  re-run the model
-- **Interactive Plotly charts**: sentiment share (pie), top
-  praise/complaint words (bars), prediction-confidence histogram
-- **Confidence metrics**: average confidence, high-confidence share
-  (≥ 80%), and a low-confidence review queue (< 60%) for human spot-checks
-- Downloadable results CSV (review, sentiment, confidence)
+- **Single review** analysis with confidence score, or **batch CSV upload**
+- **"Try with sample"** button — 30 bundled reviews, no upload needed
+- Positive / neutral / negative classification (low-confidence predictions become *neutral* instead of forced calls)
+- **Column selector** — pick which CSV column holds the review text
+- **Filters:** sentiment multiselect + date-range filter (auto-detected date column)
+- Interactive Plotly charts: distribution pie, **daily sentiment trend**, top positive/negative words, confidence histogram
+- Summary metric cards: total reviews, % positive/neutral/negative, avg confidence
+- Cached batch predictions (`st.cache_data`) for large files, **download results as CSV**
+- Friendly error handling for bad/empty/oversized CSVs
 
-## Measured results
+## Tech stack
 
-From the actual `train.py` run (stratified 80/20 split, seed 42):
+Python · Streamlit · scikit-learn (TF-IDF + LogisticRegression) · pandas · Plotly
 
-| Metric | Score |
-|---|---|
-| Accuracy | 1.000 |
-| Precision | 1.000 |
-| Recall | 1.000 |
-| F1 | 1.000 |
-| Held-out test samples | 80 |
-
-The near-perfect score is expected: the synthetic dataset reuses a small pool
-of sentiment-bearing words across many samples by design, so the classes are
-cleanly separable. On messy real-world reviews the numbers will be lower —
-which is exactly why retraining on real data matters.
-
-## Run it
+## Run locally
 
 ```bash
+git clone https://github.com/ahtashamsamad/ai-portfolio.git
+cd ai-portfolio/review-sentiment-analyzer
 pip install -r requirements.txt
-python generate_data.py   # builds reviews.csv (400 labeled reviews)
-python train.py           # trains + saves sentiment_model.joblib, prints metrics
-streamlit run app.py      # dashboard at http://localhost:8501
+streamlit run app.py
 ```
 
-If `sentiment_model.joblib` is missing when the app starts (e.g. a fresh
-deploy), the app trains it automatically from `reviews.csv`.
+> Honest note: the demo model is trained on movie-style reviews — for a real business it should be retrained on that business's own reviews (`python generate_data.py && python train.py`).
 
-## Deploying (Streamlit Community Cloud)
+## How it works
 
-Push this folder to GitHub, then at share.streamlit.io → New app → pick the
-repo → set **Main file path** to `review-sentiment-analyzer/app.py` → Deploy.
+1. Reviews are vectorized with TF-IDF and classified by a LogisticRegression model (`train.py`).
+2. Predictions below 60% confidence are labelled *neutral*.
+3. Batch results are cached, aggregated into metrics and Plotly charts, and can be filtered by sentiment and date before downloading.
 
-## Project structure
+## Future improvements
 
-```
-review-sentiment-analyzer/
-├── app.py               # Streamlit UI (cached model + predictions)
-├── sentiment_backend.py # model loading, prediction, analysis, charts (headless)
-├── train.py             # one-command training, prints metrics
-├── generate_data.py     # builds the synthetic reviews.csv
-├── reviews.csv          # 400 labeled reviews
-├── requirements.txt
-└── README.md
-```
+- 5-star / aspect-based sentiment
+- Retraining UI on the user's own labelled data
+- Scheduled batch reports
+
+## Author
+
+**Ahtasham Samad** — AI/ML Developer
+Upwork: https://www.upwork.com/freelancers/~01d75561be7a2cd578
