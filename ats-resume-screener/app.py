@@ -175,15 +175,16 @@ with col_res:
             text, error = read_text_file(u)
             files.append((name_from_filename(u.name), text))
             if error:
-                problems.append(f"{u.name}: {error}")
+                problems.append((u.name, error))
         st.session_state.resume_files = merge_uploads(
             st.session_state.resume_files, files)
         st.session_state.pop("ranked", None)
-        for problem in problems:
-            st.error(f"❌ {problem}")
-        added = [n for n, _ in files if not any(p.startswith(n) for p in problems)]
-        if added:
-            st.success(f"Added {len(added)} resume(s).")
+        for fname, error in problems:
+            st.error(f"❌ {fname}: {error}")
+        n_ok = len(files) - len(problems)
+        if n_ok:
+            st.success(f"Added {n_ok} resume(s) — total "
+                       f"{len(st.session_state.resume_files)}.")
     if st.session_state.resume_files:
         names = [n for n, _ in st.session_state.resume_files]
         st.write(f"**{len(names)}** resume(s) ready: " + ", ".join(names))
