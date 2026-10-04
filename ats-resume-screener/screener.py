@@ -117,6 +117,7 @@ def rank_resumes(jd_text, resumes, skills=None):
         ranked.append(
             {
                 "name": resume["name"],
+                "text": resume["text"],
                 "score": score,
                 "tfidf_similarity": round(float(sim), 3),
                 "skill_overlap": round(overlap, 3),
@@ -131,13 +132,15 @@ def rank_resumes(jd_text, resumes, skills=None):
 
 
 def name_from_filename(filename):
-    """'ali_raza_resume.txt' -> 'Ali Raza'."""
+    """'ali_raza_resume.txt' -> 'Ali Raza'; 'sample_resume.pdf' -> 'Sample Resume'."""
     base = os.path.basename(filename)
-    stem = re.sub(r"\.(txt|pdf)$", "", base, flags=re.IGNORECASE)
-    stem = re.sub(r"[_\-]+", " ", stem)
+    stem = re.sub(r"\.(txt|pdf|docx)$", "", base, flags=re.IGNORECASE)
+    stem = re.sub(r"[_\-]+", " ", stem).strip()
     cleaned = re.sub(r"\b(resume|cv)\b", "", stem, flags=re.IGNORECASE).strip()
-    name = " ".join(w.capitalize() for w in cleaned.split())
-    return name or stem.strip()
+    # Keep "resume"/"cv" when it was the only meaningful word.
+    core = cleaned if len(cleaned.split()) >= 2 else stem
+    name = " ".join(w.capitalize() for w in core.split())
+    return name or stem
 
 
 # ---------------------------------------------------------------------------
@@ -175,21 +178,40 @@ def extract_pdf_text(uploaded):
     return "", last_error
 
 
+def extract_docx_text(uploaded):
+    """Extract text from a .docx file. Returns (text, error); never raises."""
+    try:
+        from docx import Document
+        uploaded.seek(0)
+        doc = Document(uploaded)
+        text = "\n".join(p.text for p in doc.paragraphs)
+        if not text.strip():
+            return "", "no extractable text in this Word document"
+        return text, ""
+    except Exception as exc:
+        return "", f"could not be read ({type(exc).__name__})"
+
+
 def read_text_file(uploaded):
-    """Extract text from an uploaded .txt or .pdf file.
+    """Extract text from an uploaded .txt, .pdf or .docx file.
 
     Returns (text, error) with error == "" on success. Never raises.
     """
     name = uploaded.name.lower()
-    if not name.endswith(".pdf"):
+    if name.endswith(".pdf"):
         try:
+            return extract_pdf_text(uploaded)
+        except Exception:
+            return "", "could not be read"
+    if name.endswith(".docx"):
+        return extract_docx_text(uploaded)
+    if name.endswith(".txt"):
+        try:
+            uploaded.seek(0)
             return uploaded.read().decode("utf-8", errors="ignore"), ""
         except Exception:
             return "", "could not be read as text"
-    try:
-        return extract_pdf_text(uploaded)
-    except Exception:
-        return "", "could not be read"
+    return "", "unsupported file type (use .pdf, .docx or .txt)"
 
 
 def load_sample_data(jd_path=SAMPLE_JD_PATH, resumes_dir=SAMPLE_RESUMES_DIR):
@@ -201,3 +223,192 @@ def load_sample_data(jd_path=SAMPLE_JD_PATH, resumes_dir=SAMPLE_RESUMES_DIR):
         with open(path, encoding="utf-8") as f:
             resumes.append((name_from_filename(path), f.read()))
     return jd, resumes
+
+
+# ---------------------------------------------------------------------------
+# Section-wise feedback, suggestions and PDF report
+# ---------------------------------------------------------------------------
+
+SECTION_PATTERNS = {
+    "skills": [r"\bskills?\b", r"\btechnologies\b", r"\btech stack\b",
+               r"\bcompetencies\b"],
+    "experience": [r"\bexperience\b", r"\bwork history\b", r"\bemployment\b",
+                   r"\bprofessional background\b"],
+    "education": [r"\beducation\b", r"\bbachelor", r"\bmaster'?s?\b", r"\bph\.?d\b",
+                  r"\buniversity\b", r"\bcollege\b", r"\bdegree\b"],
+}
+
+ACTION_VERBS = {"built", "led", "designed", "developed", "launched",
+                "improved", "increased", "reduced", "managed", "created",
+                "implemented", "optimized", "delivered", "architected"}
+
+
+def _has_section(text, patterns):
+    low = text.lower()
+    return any(re.search(p, low) for p in patterns)
+
+
+def analyze_sections(text):
+    """Heuristic section-by-section review of a resume.
+
+    Returns an ordered dict: section -> (ok: bool, note: str).
+    """
+    low = text.lower()
+    words = text.split()
+    sections = {}
+
+    # Skills
+    n_skills = len(extract_skills(text, load_skills()))
+    sections["Skills"] = (
+        (n_skills >= 3, f"{n_skills} recognized skills detected.")
+        if _has_section(text, SECTION_PATTERNS["skills"]) or n_skills >= 3
+        else (False, "No clear Skills section found — add one listing your "
+                     "key technologies."))
+
+    # Experience
+    years = bool(re.search(r"\d+\+?\s*(years|yrs)", low))
+    verbs = sum(1 for v in ACTION_VERBS if re.search(r"\b" + v + r"\b", low))
+    quantified = bool(re.search(r"\d+\s*%|\$\s*\d|\d+\s*(users|clients|requests)",
+                                low))
+    if _has_section(text, SECTION_PATTERNS["experience"]):
+        note = []
+        note.append("experience section present")
+        note.append("years mentioned" if years else "no years-of-experience stated")
+        note.append(f"{verbs} action verbs used")
+        note.append("achievements quantified" if quantified
+                    else "achievements not quantified — add numbers")
+        sections["Experience"] = (verbs >= 2 and quantified, "; ".join(note) + ".")
+    else:
+        sections["Experience"] = (
+            False, "No Experience section found — list roles with dates, "
+                   "responsibilities and results.")
+
+    # Education
+    sections["Education"] = (
+        (True, "education details found.")
+        if _has_section(text, SECTION_PATTERNS["education"])
+        else (False, "No Education section found — add your degree, field "
+                     "and institution."))
+
+    # Formatting & contact
+    email = bool(re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", text))
+    phone = bool(re.search(r"\+?\d[\d\s\-()]{7,}\d", text))
+    bullets = text.count("•") + text.count("- ") + len(
+        re.findall(r"^[\*\-]\s", text, re.M))
+    n_words = len(words)
+    fmt_notes = []
+    fmt_notes.append("contact info present" if (email or phone)
+                     else "no email/phone found — add contact details")
+    fmt_notes.append(f"{n_words} words")
+    if n_words < 150:
+        fmt_notes.append("quite short — flesh out achievements")
+        fmt_ok = False
+    elif n_words > 1200:
+        fmt_notes.append("very long — trim to the most relevant 1–2 pages")
+        fmt_ok = False
+    else:
+        fmt_ok = bool(email or phone)
+    if bullets < 3:
+        fmt_notes.append("few bullet points — use bullets for readability")
+        fmt_ok = False
+    sections["Formatting"] = (fmt_ok, "; ".join(fmt_notes) + ".")
+    return sections
+
+
+def build_suggestions(candidate, jd_text):
+    """3–5 concrete, actionable resume improvements for one candidate.
+
+    candidate: a dict from rank_resumes(); jd_text: the job description.
+    """
+    suggestions = []
+    text = candidate.get("text", "") or ""
+    missing = candidate.get("missing_skills", [])
+
+    if missing:
+        suggestions.append(
+            "Add these posting keywords your resume is missing: "
+            + ", ".join(missing[:6]) + ".")
+    if candidate.get("tfidf_similarity", 0) < 0.3:
+        suggestions.append(
+            "Mirror the posting's language — rephrase your experience using "
+            "the same terms the job description uses.")
+    low = text.lower()
+    if not re.search(r"\d+\s*%|\$\s*\d|\d+\s*(users|clients|requests|projects)",
+                     low):
+        suggestions.append(
+            "Quantify achievements with numbers (%, users, revenue, latency) "
+            "— measurable impact stands out to recruiters and ATS alike.")
+    if not _has_section(text, SECTION_PATTERNS["education"]):
+        suggestions.append(
+            "Add an Education section (degree, field, institution, year).")
+    if len(text.split()) < 200:
+        suggestions.append(
+            "The resume is short — expand each role with 2–3 bullet points "
+            "covering what you did and the result.")
+    if not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", text):
+        suggestions.append(
+            "Add contact details (email, phone, location/LinkedIn) at the top.")
+    # Always useful, kept last so the list never comes back empty.
+    suggestions.append(
+        "Tailor this resume per application: keep the strongest 60–70% of "
+        "content aligned to each specific posting.")
+    return suggestions[:5]
+
+
+def _latin1(text):
+    """fpdf2's core fonts are latin-1 — strip anything else."""
+    return text.encode("latin-1", errors="ignore").decode("latin-1")
+
+
+def build_report_pdf(ranked, jd_text):
+    """Build a PDF screening report. Returns bytes (fpdf2)."""
+    from fpdf import FPDF
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.cell(0, 12, _latin1("ATS Resume Screening Report"), new_x="LMARGIN",
+             new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 8, _latin1(f"Candidates scored: {len(ranked)}"),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, _latin1("Ranking"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    for i, r in enumerate(ranked, 1):
+        pdf.cell(0, 7, _latin1(
+            f"#{i}  {r['name']}  —  {r['score']}% match  "
+            f"(similarity {r['tfidf_similarity']:.2f}, "
+            f"skills {r['skill_overlap']:.0%})"),
+            new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    for i, r in enumerate(ranked, 1):
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.cell(0, 10, _latin1(f"#{i} — {r['name']} ({r['score']}% match)"),
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(0, 6, _latin1(r["summary"]), new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 8, _latin1("Matched skills"), new_x="LMARGIN",
+                 new_y="NEXT")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(0, 6, _latin1(", ".join(r["matched_skills"]) or "None"),
+                         new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 8, _latin1("Missing skills"), new_x="LMARGIN",
+                 new_y="NEXT")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(0, 6, _latin1(", ".join(r["missing_skills"]) or "None"),
+                         new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 8, _latin1("Suggestions"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 10)
+        for s in build_suggestions(r, jd_text):
+            pdf.multi_cell(0, 6, _latin1("- " + s), new_x="LMARGIN", new_y="NEXT")
+    return bytes(pdf.output())

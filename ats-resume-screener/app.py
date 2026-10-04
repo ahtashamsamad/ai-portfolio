@@ -1,8 +1,13 @@
 """ATS Resume Screener — Streamlit app.
 
 Ranks resumes against a job description using TF-IDF semantic similarity
-plus skill overlap, and explains every score. Deployable on Streamlit
-Community Cloud: main file path is app.py.
+plus skill overlap, and explains every score: gauge chart, matched/missing
+skill pills, section-wise feedback and concrete improvement suggestions.
+Recruiters can screen many resumes at once; candidates get actionable
+feedback. Deployable on Streamlit Community Cloud: main file path is app.py.
+
+Privacy: resumes are processed in memory only — never stored, never sent
+anywhere.
 """
 
 import html
@@ -12,6 +17,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from screener import (
+    analyze_sections,
+    build_report_pdf,
+    build_suggestions,
     load_sample_data,
     load_skills,
     name_from_filename,
@@ -19,16 +27,48 @@ from screener import (
     read_text_file,
 )
 
-st.set_page_config(page_title="ATS Resume Screener", page_icon="📋", layout="wide")
+# ---------------------------------------------------------------------------
+# Portfolio chrome
+# ---------------------------------------------------------------------------
+
+DEV_NAME = "Ahtasham Samad"
+UPWORK_URL = "https://www.upwork.com/freelancers/~01d75561be7a2cd578"
+
+
+def render_about_sidebar():
+    with st.sidebar:
+        st.divider()
+        st.subheader("About")
+        st.markdown(f"**Built by [{DEV_NAME}]({UPWORK_URL})** — AI/ML Developer")
+        st.markdown("**Tools:** Python, Streamlit, scikit-learn (TF-IDF), "
+                    "pypdf, python-docx, Plotly, fpdf2")
+
+
+def render_footer():
+    st.divider()
+    st.markdown(
+        f"Need a custom AI app? **[Hire me on Upwork]({UPWORK_URL})** · "
+        f"Built by {DEV_NAME}"
+    )
+
+
+st.set_page_config(page_title="ATS Resume Screener", page_icon="📋",
+                   layout="wide")
 
 st.title("📋 ATS Resume Screener")
-st.write(
-    "HR teams receive hundreds of resumes per posting, and keyword-only ATS "
-    "filters reject strong candidates over vocabulary mismatch. Paste a job "
-    "description, upload resumes, and get a **ranked shortlist with every "
-    "score explained** — TF-IDF semantic similarity plus skill overlap. "
-    "No black box."
+st.caption("⏳ If the app was asleep, it may take up to a minute to wake — "
+           "please wait.")
+st.info(
+    "**What it does:** Ranks resumes against a job description — match score, "
+    "skill gaps, section feedback and concrete fixes. No black box.\n\n"
+    "**Who it's for:** Recruiters screening many applicants, and candidates "
+    "who want to beat keyword-only ATS filters.\n\n"
+    "**How to use:** ① Paste a job description (or load the sample) → "
+    "② Upload resumes → ③ Rank candidates and download the report."
 )
+st.caption("🔒 **Privacy:** resumes are processed in memory only — they are "
+           "never stored or sent anywhere.")
+render_about_sidebar()
 
 SKILLS = load_skills()
 
@@ -89,6 +129,21 @@ if st.button("✨ Load sample data (AI/ML Engineer posting + 5 resumes)"):
     st.session_state.pop("ranked", None)
     st.success(f"Loaded job description + {len(resumes)} sample resumes.")
 
+
+def merge_uploads(existing, new_files):
+    """Append newly uploaded resumes; same filename replaces the old entry."""
+    merged = list(existing)
+    names = {n for n, _ in merged}
+    for name, text in new_files:
+        if name in names:
+            merged = [(n, t) if n != name else (name, text)
+                      for n, t in merged]
+        else:
+            merged.append((name, text))
+            names.add(name)
+    return merged
+
+
 # ---------- inputs ----------
 col_jd, col_res = st.columns(2)
 
@@ -96,40 +151,52 @@ with col_jd:
     st.subheader("1️⃣ Job description")
     jd_text = st.text_area(
         "Paste the job description", height=280, key="jd_text",
-        help="Or upload it below — the upload replaces this text.",
-    )
-    jd_upload = st.file_uploader("…or upload JD (.txt / .pdf)", type=["txt", "pdf"], key="jd_up")
+        help="Or upload it below — the upload replaces this text.")
+    jd_upload = st.file_uploader("…or upload JD (.txt / .pdf / .docx)",
+                                 type=["txt", "pdf", "docx"], key="jd_up")
     if jd_upload is not None:
         jd_text, jd_error = read_text_file(jd_upload)
         if jd_error:
             st.error(f"❌ {jd_upload.name}: {jd_error}")
+        elif jd_text.strip():
+            st.session_state.jd_text = jd_text
+            st.success(f"Loaded JD from {jd_upload.name}.")
+            st.rerun()
 
 with col_res:
     st.subheader("2️⃣ Resumes")
     uploads = st.file_uploader(
-        "Upload resumes (.pdf / .txt)", type=["pdf", "txt"],
+        "Upload resumes (.pdf / .docx / .txt)", type=["pdf", "docx", "txt"],
         accept_multiple_files=True, key="res_up",
-    )
+        help="New uploads are added to the list — existing ones are kept.")
     if uploads:
         files, problems = [], []
         for u in uploads:
             text, error = read_text_file(u)
             files.append((name_from_filename(u.name), text))
             if error:
-                problems.append(f"{u.name}: {error}")
-        st.session_state.resume_files = files
+                problems.append((u.name, error))
+        st.session_state.resume_files = merge_uploads(
+            st.session_state.resume_files, files)
         st.session_state.pop("ranked", None)
-        for problem in problems:
-            st.error(f"❌ {problem}")
+        for fname, error in problems:
+            st.error(f"❌ {fname}: {error}")
+        n_ok = len(files) - len(problems)
+        if n_ok:
+            st.success(f"Added {n_ok} resume(s) — total "
+                       f"{len(st.session_state.resume_files)}.")
     if st.session_state.resume_files:
         names = [n for n, _ in st.session_state.resume_files]
         st.write(f"**{len(names)}** resume(s) ready: " + ", ".join(names))
+        if st.button("🗑 Clear resumes"):
+            st.session_state.resume_files = []
+            st.session_state.pop("ranked", None)
+            st.rerun()
         empty = [n for n, t in st.session_state.resume_files if not t.strip()]
         if empty:
             st.warning(
                 "No extractable text in: " + ", ".join(empty)
-                + " (scanned/image PDFs need OCR first)."
-            )
+                + " (scanned/image PDFs need OCR first).")
 
 # ---------- ranking ----------
 st.subheader("3️⃣ Rank candidates")
@@ -146,6 +213,7 @@ if st.button("🚀 Rank candidates", type="primary"):
                 skills=SKILLS,
             )
         st.session_state.ranked = ranked
+        st.success(f"Scored {len(ranked)} candidate(s).")
 
 if st.session_state.get("ranked"):
     ranked = st.session_state.ranked
@@ -194,6 +262,13 @@ if st.session_state.get("ranked"):
             st.markdown("**❌ Missing skills (wanted by the JD)**")
             st.markdown(skill_pills(r["missing_skills"], "missing"),
                         unsafe_allow_html=True)
+            st.markdown("**📑 Section-wise feedback**")
+            for section, (ok, note) in analyze_sections(r["text"]).items():
+                icon = "✅" if ok else "⚠️"
+                st.write(f"{icon} **{section}:** {note}")
+            st.markdown("**💡 Suggestions to improve this resume**")
+            for s in build_suggestions(r, jd_text):
+                st.write(f"• {s}")
             st.info(r["summary"])
 
     st.caption(
@@ -201,13 +276,18 @@ if st.session_state.get("ranked"):
         "measurements, not hiring decisions. Always have a human review the shortlist."
     )
 
-with st.sidebar:
-    st.header("How scoring works")
-    st.write(
-        "Score = **0.6 × TF-IDF cosine similarity** (job description vs resume "
-        "wording) + **0.4 × skill overlap** (share of the JD's listed skills "
-        "found in the resume), scaled to 0–100.\n\n"
-        "Common abbreviations are expanded before matching (ML → machine "
-        "learning), so candidates aren't punished for vocabulary mismatch — "
-        "the exact problem keyword-only ATS systems have."
-    )
+    # ---- downloads ----
+    d1, d2 = st.columns(2)
+    with d1:
+        st.download_button(
+            "⬇ Download ranking as CSV",
+            df.to_csv(index=False).encode("utf-8"),
+            file_name="ats_ranking.csv", mime="text/csv")
+    with d2:
+        with st.spinner("Building PDF report…"):
+            pdf_bytes = build_report_pdf(ranked, jd_text)
+        st.download_button(
+            "⬇ Download full report as PDF", pdf_bytes,
+            file_name="ats_report.pdf", mime="application/pdf")
+
+render_footer()
