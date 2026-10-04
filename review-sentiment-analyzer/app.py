@@ -132,6 +132,16 @@ def _cached_model():
     return get_model()
 
 
+@st.cache_data(show_spinner=False)
+def cached_batch_predict(_model, texts):
+    """Classify an immutable tuple of texts; results are cached across reruns.
+
+    `_model` is underscore-prefixed so Streamlit skips hashing it; `texts`
+    must be a tuple (hashable) for the cache key.
+    """
+    return batch_predict(_model, list(texts))
+
+
 def main():
     st.set_page_config(page_title="Review Sentiment Analyzer", page_icon="📊")
     st.title("📊 Customer Review Sentiment Dashboard")
@@ -168,14 +178,16 @@ def main():
             texts = texts[:MAX_BATCH_ROWS]
         st.caption(f"Classifying column: `{col}` ({len(texts):,} rows)")
 
-        # Classify in chunks so the progress bar stays alive on big files.
-        chunk_size = 500
-        frames, progress = [], st.progress(0, text="Classifying reviews…")
-        for j in range(0, len(texts), chunk_size):
-            frames.append(batch_predict(model, texts[j:j + chunk_size]))
-            progress.progress(min(1.0, (j + chunk_size) / len(texts)))
-        progress.empty()
-        results = pd.concat(frames, ignore_index=True)
+        # Cached: repeat reruns (e.g. tweaking charts below) don't re-classify.
+        with st.spinner("Classifying reviews…"):
+            results = cached_batch_predict(model, tuple(texts))
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Avg confidence", f"{results['confidence'].mean():.1%}")
+        c2.metric("High confidence (≥ 80%)",
+                  f"{(results['confidence'] >= 0.8).mean():.1%}")
+        c3.metric(f"Needs review (< {LOW_CONFIDENCE:.0%})",
+                  f"{(results['confidence'] < LOW_CONFIDENCE).sum():,}")
 
         counts = results["sentiment"].value_counts()
         st.plotly_chart(distribution_figure(counts), use_container_width=True)
