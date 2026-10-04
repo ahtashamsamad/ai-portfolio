@@ -9,15 +9,21 @@ natural-language answers written only from those passages.
 
 ## Features
 
+- Modern chat UI (`st.chat_message` / `st.chat_input`) with the full
+  conversation kept in `st.session_state` — the PDF is indexed **once**,
+  then reused on every rerun
 - PDF upload with page-by-page text extraction (`pypdf`)
-- ~300-word passages with 50-word overlap, each tagged with its page number
+- **Sentence-aware chunking**: ~300-word passages that break at sentence
+  boundaries (50-word overlap), each tagged with its page number
 - TF-IDF retrieval (`scikit-learn`) — top-3 passages per question
 - **Extractive mode** (no key): shows the passages directly, 100% local —
   your document never leaves the machine
 - **LLM mode** (optional key): GPT writes a natural answer grounded *only*
   in the retrieved passages, with page citations; graceful fallback to
   extractive mode if the API call fails
-- Handles empty / scanned PDFs gracefully (explains the OCR step)
+- Upload guardrails: 25 MB file-size limit, plus friendly errors (not
+  crashes) for corrupt, password-protected, or scanned/image-only PDFs
+- 🧹 **Clear chat** button — resets the conversation while the PDF stays indexed
 
 ## Run it
 
@@ -42,3 +48,13 @@ Then open the URL Streamlit prints (usually http://localhost:8501).
 
 Push this folder to GitHub, then at share.streamlit.io → New app → pick the
 repo → set **Main file path** to `pdf-rag-chatbot/app.py` → Deploy.
+
+## Project structure
+
+```
+pdf-rag-chatbot/
+├── app.py            # Streamlit UI (chat, session state)
+├── rag_backend.py    # extraction, chunking, retrieval, LLM (testable headless)
+├── requirements.txt
+└── README.md
+```

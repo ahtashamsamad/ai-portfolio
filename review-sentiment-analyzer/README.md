@@ -12,6 +12,20 @@ reviews (see `generate_data.py`). For a real business it should be retrained
 on that business's own labeled reviews — the pipeline (`train.py`) makes that
 a one-command job.
 
+## Features
+
+- **Single review**: instant prediction with confidence score
+- **Batch CSV**: upload a whole file — validated on read (bad CSV / empty
+  file shows a friendly error), capped at 5,000 rows per run, with a live
+  progress bar
+- `@st.cache_data` on batch predictions — tweaking charts below doesn't
+  re-run the model
+- **Interactive Plotly charts**: sentiment share (pie), top
+  praise/complaint words (bars), prediction-confidence histogram
+- **Confidence metrics**: average confidence, high-confidence share
+  (≥ 80%), and a low-confidence review queue (< 60%) for human spot-checks
+- Downloadable results CSV (review, sentiment, confidence)
+
 ## Measured results
 
 From the actual `train.py` run (stratified 80/20 split, seed 42):
@@ -45,3 +59,16 @@ deploy), the app trains it automatically from `reviews.csv`.
 
 Push this folder to GitHub, then at share.streamlit.io → New app → pick the
 repo → set **Main file path** to `review-sentiment-analyzer/app.py` → Deploy.
+
+## Project structure
+
+```
+review-sentiment-analyzer/
+├── app.py               # Streamlit UI (cached model + predictions)
+├── sentiment_backend.py # model loading, prediction, analysis, charts (headless)
+├── train.py             # one-command training, prints metrics
+├── generate_data.py     # builds the synthetic reviews.csv
+├── reviews.csv          # 400 labeled reviews
+├── requirements.txt
+└── README.md
+```

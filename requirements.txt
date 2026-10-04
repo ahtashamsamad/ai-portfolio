@@ -8,5 +8,5 @@ openai
 fastapi
 uvicorn
 pandas
-matplotlib
+plotly
 joblib

@@ -3,4 +3,5 @@ streamlit
 scikit-learn
 pypdf
 pandas
+plotly
 numpy

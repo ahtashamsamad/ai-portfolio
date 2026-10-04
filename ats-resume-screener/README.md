@@ -12,11 +12,15 @@ exactly *why* each candidate scored the way they did.
 
 - Paste a job description (or upload it as `.txt` / `.pdf`)
 - Upload multiple resumes (`.pdf` via `pypdf` text extraction, or `.txt`)
-- One click → **ranked shortlist**: candidate name, match score %, matched /
-  missing skill counts
+- **Robust PDF extraction**: layout mode first (keeps multi-column resumes
+  readable), plain mode as fallback; corrupt / password-protected / scanned
+  PDFs get a per-file error message instead of breaking the batch
+- One click → **ranked shortlist**: Plotly gauge for the top match score,
+  then the full table (candidate, match %, matched/missing counts,
+  TF-IDF similarity)
 - Per-candidate detail view: score bar, TF-IDF similarity, skill-overlap %,
-  matched ✅ / missing ❌ skills, and a 2–3 line plain-English "why this
-  candidate fits / gaps" summary
+  color-coded skill pills (**green** matched / **red** missing), and a 2–3
+  line plain-English "why this candidate fits / gaps" summary
 - Built-in skill vocabulary (`skills.txt`, ~125 tech + business skills) with
   abbreviation expansion (`ML` → `machine learning`, `NLP` → `natural
   language processing`), so candidates aren't punished for vocabulary mismatch
@@ -62,8 +66,8 @@ streamlit run app.py
 
 ```
 ats-resume-screener/
-├── app.py            # Streamlit UI
-├── screener.py       # scoring + skill extraction (testable headless)
+├── app.py            # Streamlit UI (gauge, pills, ranking flow)
+├── screener.py       # scoring, skill extraction + file I/O (testable headless)
 ├── skills.txt        # skill vocabulary (~125 skills)
 ├── sample_jd.txt     # sample job posting (AI/ML Engineer)
 ├── resumes/          # 5 sample resumes (.txt)
