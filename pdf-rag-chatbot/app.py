@@ -29,6 +29,10 @@ OVERLAP_WORDS = 50     # overlap between consecutive passages (keeps context)
 TOP_K = 3              # how many passages to retrieve per question
 MAX_PDF_MB = 25        # reject uploads larger than this (memory safety)
 
+# Split on sentence-ending punctuation so chunks break at sentence
+# boundaries instead of mid-sentence.
+SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
+
 
 # ---------------------------------------------------------------------------
 # Core logic (pure functions — easy to test, no Streamlit dependency)
@@ -55,22 +59,43 @@ def extract_pages(pdf_file):
 
 
 def chunk_pages(pages, chunk_words=CHUNK_WORDS, overlap=OVERLAP_WORDS):
-    """Split page texts into overlapping word chunks, keeping page numbers.
+    """Split page texts into sentence-aware overlapping chunks.
 
+    Sentences are packed greedily up to ~chunk_words; consecutive chunks
+    share the last ~overlap words so an idea is never cut off mid-thought.
+    A single pathological sentence longer than chunk_words is word-sliced.
     Returns [{"page": int, "text": str}, ...].
     """
     chunks = []
+
+    def flush(buf, page_num):
+        if buf:
+            chunks.append({"page": page_num, "text": " ".join(buf)})
+
     for page_num, text in pages:
-        words = text.split()
-        if not words:
+        sentences = [s.strip() for s in SENTENCE_RE.split(text) if s.strip()]
+        if not sentences:
             continue
-        start = 0
-        while start < len(words):
-            end = start + chunk_words
-            chunks.append({"page": page_num, "text": " ".join(words[start:end])})
-            if end >= len(words):
-                break
-            start = end - overlap
+        buf, buf_words = [], 0
+        for sent in sentences:
+            words = sent.split()
+            if len(words) > chunk_words:
+                # Pathological single sentence: fall back to word slicing.
+                flush(buf, page_num)
+                buf, buf_words = [], 0
+                step = max(1, chunk_words - overlap)
+                for i in range(0, len(words), step):
+                    flush(words[i:i + chunk_words], page_num)
+                continue
+            if buf_words + len(words) > chunk_words:
+                flush(buf, page_num)
+                # Carry trailing overlap words into the next chunk so
+                # context survives the boundary.
+                buf = buf[-overlap:] if overlap > 0 else []
+                buf_words = len(buf)
+            buf.extend(words)
+            buf_words += len(words)
+        flush(buf, page_num)
     return chunks
 
 
@@ -257,7 +282,13 @@ def main():
             return
 
     doc = st.session_state.doc
-    st.caption(f"Chatting with **{doc['name']}** — {doc['pages']} pages indexed.")
+    head_l, head_r = st.columns([5, 1])
+    with head_l:
+        st.caption(f"Chatting with **{doc['name']}** — {doc['pages']} pages indexed.")
+    with head_r:
+        if st.button("🧹 Clear", help="Clear the chat history (keeps the indexed PDF)"):
+            st.session_state.messages = []
+            st.rerun()
 
     render_history()
 
