@@ -131,8 +131,6 @@ def init_state():
     if "doc" not in st.session_state:
         # {"name": str, "pages": int, "chunks": [...]} once a PDF is indexed
         st.session_state.doc = None
-    if "last_question" not in st.session_state:
-        st.session_state.last_question = None
 
 
 def index_pdf(uploaded):
@@ -154,7 +152,6 @@ def index_pdf(uploaded):
         "chunks": chunks,
     }
     st.session_state.messages = []       # fresh document -> fresh conversation
-    st.session_state.last_question = None
     st.success(f"Indexed {len(chunks)} passages from {len(pages)} pages.")
     return True
 
@@ -187,16 +184,14 @@ def answer_question(question, api_key):
 
 
 def render_history():
-    """Render the conversation stored in session state."""
+    """Render the conversation stored in session state as chat bubbles."""
     for m in st.session_state.messages:
-        if m["role"] == "user":
-            st.markdown(f"**🧑 You:** {m['content']}")
-        else:
-            st.markdown(f"**🤖 Assistant:** {m['content']}")
+        with st.chat_message("user" if m["role"] == "user" else "assistant"):
+            st.markdown(m["content"])
             for i, r in enumerate(m.get("sources", []), 1):
                 snippet = r["text"][:1200] + ("…" if len(r["text"]) > 1200 else "")
                 with st.expander(
-                    f"Passage {i} — page {r['page']} (relevance {r['score']:.3f})"
+                    f"📄 Passage {i} — page {r['page']} (relevance {r['score']:.3f})"
                 ):
                     st.write(snippet)
 
@@ -229,7 +224,6 @@ def main():
         # File removed (or never uploaded) -> drop the document and history.
         st.session_state.doc = None
         st.session_state.messages = []
-        st.session_state.last_question = None
         st.info("Upload a PDF to get started.")
         return
 
@@ -243,11 +237,10 @@ def main():
 
     render_history()
 
-    question = st.text_input("Ask a question about the document")
-    # Guard against re-processing the same question on every rerun.
-    if question and question != st.session_state.last_question:
-        st.session_state.last_question = question
-        answer_question(question, api_key)
+    # st.chat_input clears itself after submit, so each question is
+    # processed exactly once — no rerun guard needed.
+    if prompt := st.chat_input("Ask a question about the document"):
+        answer_question(prompt, api_key)
         st.rerun()
 
 
