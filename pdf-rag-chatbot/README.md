@@ -6,7 +6,7 @@ Chat with your PDFs — grounded answers with page-numbered sources, never hallu
 
 ## Screenshots
 
-> Screenshots will be added after the next deploy (`docs/screenshots/`).
+![PDF RAG Chatbot](docs/screenshots/app.png)
 
 ## Features
 
