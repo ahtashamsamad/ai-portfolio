@@ -9,6 +9,7 @@ import glob
 import os
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 from pypdf import PdfReader
 
@@ -54,6 +55,29 @@ def load_sample_data():
         with open(path, encoding="utf-8") as f:
             resumes.append((name_from_filename(path), f.read()))
     return jd, resumes
+
+
+def gauge_figure(score, name):
+    """Plotly gauge visualising a candidate's overall ATS match score (0-100)."""
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=score,
+        title={"text": f"Top match: {name}"},
+        number={"suffix": "%"},
+        gauge={
+            "axis": {"range": [0, 100]},
+            "bar": {"color": "#1f77b4"},
+            "steps": [
+                {"range": [0, 50], "color": "#f2f2f2"},
+                {"range": [50, 75], "color": "#d9e8f5"},
+                {"range": [75, 100], "color": "#c6e6c6"},
+            ],
+            "threshold": {"line": {"color": "#d62728", "width": 4},
+                          "thickness": 0.75, "value": 80},
+        },
+    ))
+    fig.update_layout(height=280, margin={"t": 60, "b": 20, "l": 20, "r": 20})
+    return fig
 
 
 # ---------- sample data ----------
@@ -117,6 +141,17 @@ if st.button("🚀 Rank candidates", type="primary"):
 if st.session_state.get("ranked"):
     ranked = st.session_state.ranked
     st.subheader("📊 Ranked shortlist")
+
+    top = ranked[0]
+    g1, g2 = st.columns([1, 2])
+    with g1:
+        st.plotly_chart(gauge_figure(top["score"], top["name"]),
+                        use_container_width=True)
+    with g2:
+        st.metric("Candidates scored", len(ranked))
+        st.metric("Top TF-IDF similarity", f"{top['tfidf_similarity']:.3f}")
+        st.metric("Top skill overlap", f"{top['skill_overlap']:.0%}")
+
     df = pd.DataFrame(
         [
             {
