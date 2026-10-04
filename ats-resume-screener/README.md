@@ -1,76 +1,51 @@
-Live demo: https://ai-portfolio-et3o8xwtmckpkuk2rynywq.streamlit.app/
-
 # 📋 ATS Resume Screener
 
-HR teams receive hundreds of resumes per posting, and standard keyword-based
-ATS (Applicant Tracking Systems) reject strong candidates over vocabulary
-mismatch — "ML" vs "machine learning" shouldn't decide a career. This app
-ranks candidates by **semantic similarity plus skill overlap** and shows
-exactly *why* each candidate scored the way they did.
+Rank resumes against a job description — match score, skill gaps, section feedback and concrete fixes. No black box.
+
+**Live demo:** https://ai-portfolio-et3o8xwtmckpkuk2rynywq.streamlit.app/
+
+## Screenshots
+
+> Screenshots will be added after the next deploy (`docs/screenshots/`).
 
 ## Features
 
-- Paste a job description (or upload it as `.txt` / `.pdf`)
-- Upload multiple resumes (`.pdf` via `pypdf` text extraction, or `.txt`)
-- **Robust PDF extraction**: layout mode first (keeps multi-column resumes
-  readable), plain mode as fallback; corrupt / password-protected / scanned
-  PDFs get a per-file error message instead of breaking the batch
-- One click → **ranked shortlist**: Plotly gauge for the top match score,
-  then the full table (candidate, match %, matched/missing counts,
-  TF-IDF similarity)
-- Per-candidate detail view: score bar, TF-IDF similarity, skill-overlap %,
-  color-coded skill pills (**green** matched / **red** missing), and a 2–3
-  line plain-English "why this candidate fits / gaps" summary
-- Built-in skill vocabulary (`skills.txt`, ~125 tech + business skills) with
-  abbreviation expansion (`ML` → `machine learning`, `NLP` → `natural
-  language processing`), so candidates aren't punished for vocabulary mismatch
-- **✨ Load sample data** button: an AI/ML Engineer posting + 5 sample resumes
-  (2 strong, 2 partial, 1 weak) for an instant demo
+- Paste a job description (or upload it) and upload **multiple resumes** (PDF, DOCX, TXT)
+- **"Try with sample"** — AI/ML Engineer posting + 5 sample resumes, one click
+- **Ranked shortlist** with gauge chart, TF-IDF similarity and skill-overlap metrics
+- **Matched / missing skill pills**, per-candidate expanders
+- **Section-wise feedback** (Skills, Experience, Education, Formatting)
+- **3–5 concrete suggestions** per candidate (missing keywords, quantified achievements, …)
+- **Downloads:** ranking CSV + full **PDF report**
+- 🔒 **Privacy:** resumes are processed in memory only — never stored or sent anywhere
+- Friendly error handling: corrupt/encrypted/scanned PDFs, bad Word files, empty uploads
 
-## How scoring works (explainable, no black box)
+## Tech stack
 
-```
-score = 0.6 × TF-IDF cosine similarity (JD vs resume wording)
-      + 0.4 × skill overlap (share of the JD's listed skills found in the resume)
-```
-scaled to 0–100. Skill matching is case-insensitive with word-boundary-safe
-abbreviation expansion. Everything the score is made of is shown in the UI.
+Python · Streamlit · scikit-learn (TF-IDF) · pypdf · python-docx · Plotly · fpdf2 · pandas
 
-## Honest limitations
-
-- Scores are **similarity-based rankings for shortlisting only** — they are
-  measurements, not hiring decisions. A human must always review the shortlist.
-- Simple keyword matching can't judge experience *depth* ("used TensorFlow
-  once" vs "shipped TensorFlow to production" score the same).
-- Short tokens can misfire (e.g. the verb "go" matching the **Go** language) —
-  the skill list is a starting point, not a taxonomy.
-- Scanned/image PDFs contain no extractable text; they need OCR first (the app
-  warns you when a resume yields no text).
-
-## Run it
+## Run locally
 
 ```bash
+git clone https://github.com/ahtashamsamad/ai-portfolio.git
+cd ai-portfolio/ats-resume-screener
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Sample-data walkthrough
+## How it works
 
-1. Click **✨ Load sample data**.
-2. Click **🚀 Rank candidates**.
-3. Expected result: the two AI/ML engineers (Ali Raza, Sara Khan) rank at the
-   top, the data analyst and backend developer land in the middle, and the
-   sales executive ranks last — each with matched/missing skills explained.
+Score = **0.6 × TF-IDF cosine similarity** (job description vs resume wording) + **0.4 × skill overlap** (share of the posting's listed skills found in the resume), scaled to 0–100. Common abbreviations are expanded before matching (ML → machine learning), so candidates aren't punished for vocabulary mismatch — the exact problem keyword-only ATS systems have.
 
-## Project structure
+Scores rank candidates for **shortlisting only** — they are similarity measurements, not hiring decisions.
 
-```
-ats-resume-screener/
-├── app.py            # Streamlit UI (gauge, pills, ranking flow)
-├── screener.py       # scoring, skill extraction + file I/O (testable headless)
-├── skills.txt        # skill vocabulary (~125 skills)
-├── sample_jd.txt     # sample job posting (AI/ML Engineer)
-├── resumes/          # 5 sample resumes (.txt)
-├── requirements.txt
-└── README.md
-```
+## Future improvements
+
+- Embedding-based semantic matching
+- Parsing structured fields (experience years, location)
+- Team workspaces and saved screenings
+
+## Author
+
+**Ahtasham Samad** — AI/ML Developer
+Upwork: https://www.upwork.com/freelancers/~01d75561be7a2cd578
