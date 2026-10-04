@@ -33,6 +33,9 @@ NEG_WORDS = {"terrible", "awful", "horrible", "boring", "disappointing",
              "dreadful", "unwatchable", "painful", "pathetic", "atrocious",
              "hated", "disliked", "regretted", "disaster", "mess"}
 
+MAX_BATCH_ROWS = 5000  # cap for a single CSV upload (keeps memory predictable)
+LOW_CONFIDENCE = 0.60  # predictions below this are flagged for human review
+
 
 # ---------------------------------------------------------------------------
 # Core logic (pure functions — easy to test, no Streamlit dependency)
@@ -106,6 +109,20 @@ def top_words_figure(word_counts, title, color):
     return fig
 
 
+def confidence_figure(confidences):
+    """Interactive Plotly histogram of prediction confidence scores."""
+    fig = px.histogram(
+        x=confidences,
+        nbins=20,
+        title="Confidence distribution",
+        labels={"x": "Confidence", "y": "Reviews"},
+        color_discrete_sequence=["#1f77b4"],
+    )
+    fig.add_vline(x=LOW_CONFIDENCE, line_dash="dash", line_color="red",
+                  annotation_text="review threshold")
+    return fig
+
+
 # ---------------------------------------------------------------------------
 # Streamlit UI
 # ---------------------------------------------------------------------------
@@ -134,14 +151,42 @@ def main():
     st.subheader("Batch analysis (CSV upload)")
     uploaded = st.file_uploader("Upload a CSV with a review-text column", type=["csv"])
     if uploaded is not None:
-        df = pd.read_csv(uploaded)
+        try:
+            df = pd.read_csv(uploaded)
+        except Exception as exc:
+            st.error(f"Could not read that CSV ({exc}). "
+                     "Make sure it is a valid CSV file.")
+            return
+        if df.empty:
+            st.warning("That CSV has no rows to analyze.")
+            return
         col = "review" if "review" in df.columns else df.columns[0]
-        st.caption(f"Classifying column: `{col}` ({len(df)} rows)")
-        with st.spinner("Classifying…"):
-            results = batch_predict(model, df[col].astype(str).tolist())
+        texts = df[col].astype(str).tolist()
+        if len(texts) > MAX_BATCH_ROWS:
+            st.warning(f"Large file — analyzing the first {MAX_BATCH_ROWS:,} of "
+                       f"{len(texts):,} rows.")
+            texts = texts[:MAX_BATCH_ROWS]
+        st.caption(f"Classifying column: `{col}` ({len(texts):,} rows)")
+
+        # Classify in chunks so the progress bar stays alive on big files.
+        chunk_size = 500
+        frames, progress = [], st.progress(0, text="Classifying reviews…")
+        for j in range(0, len(texts), chunk_size):
+            frames.append(batch_predict(model, texts[j:j + chunk_size]))
+            progress.progress(min(1.0, (j + chunk_size) / len(texts)))
+        progress.empty()
+        results = pd.concat(frames, ignore_index=True)
 
         counts = results["sentiment"].value_counts()
         st.plotly_chart(distribution_figure(counts), use_container_width=True)
+        st.plotly_chart(confidence_figure(results["confidence"]),
+                        use_container_width=True)
+
+        low = results[results["confidence"] < LOW_CONFIDENCE]
+        if not low.empty:
+            with st.expander(f"⚠️ {len(low)} low-confidence predictions "
+                             f"(< {LOW_CONFIDENCE:.0%}) — worth a human look"):
+                st.dataframe(low, hide_index=True, use_container_width=True)
 
         pos = results.loc[results["sentiment"] == "positive", "review"]
         neg = results.loc[results["sentiment"] == "negative", "review"]
